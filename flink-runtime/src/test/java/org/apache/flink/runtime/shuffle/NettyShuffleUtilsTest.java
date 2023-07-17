@@ -63,10 +63,19 @@ public class NettyShuffleUtilsTest extends TestLogger {
      */
     @Test
     public void testComputeRequiredNetworkBuffers() throws Exception {
+        // NettyShuffleMaster.buffersPerInputChannel 'taskmanager.network.memory.buffers-per-channel'
         int numBuffersPerChannel = 5;
+
+        // NettyShuffleMaster.numFloatingBuffersPerGate 'taskmanager.network.memory.floating-buffers-per-gate'
         int numBuffersPerGate = 8;
+
+        // NettyShuffleMaster.maxRequiredBuffersPerGate 'taskmanager.network.sort-shuffle.min-parallelism'
         Optional<Integer> maxRequiredBuffersPerGate = Optional.of(Integer.MAX_VALUE);
+
+        // NettyShuffleMaster.sortShuffleMinParallelism taskmanager.network.sort-shuffle.min-parallelism
         int sortShuffleMinParallelism = 8;
+
+        // NettyShuffleMaster.sortShuffleMinBuffers  taskmanager.network.sort-shuffle.min-buffers
         int numSortShuffleMinBuffers = 12;
 
         IntermediateDataSetID ids1 = new IntermediateDataSetID();
@@ -82,13 +91,19 @@ public class NettyShuffleUtilsTest extends TestLogger {
         int numSubs1 = 5; // pipelined shuffle
         int numSubs2 = 6; // hash blocking shuffle
         int numSubs3 = 10; // sort blocking shuffle
+
         Map<IntermediateDataSetID, Integer> subpartitionNums =
                 ImmutableMap.of(ds1, numSubs1, ds2, numSubs2, ds3, numSubs3);
+
         Map<IntermediateDataSetID, ResultPartitionType> partitionTypes =
                 ImmutableMap.of(ds1, PIPELINED_BOUNDED, ds2, BLOCKING, ds3, BLOCKING);
+
         Map<IntermediateDataSetID, Integer> numInputChannels =
                 ImmutableMap.of(ids1, numChannels1, ids2, numChannels2);
-        Map<IntermediateDataSetID, Integer> partitionReuseCount = ImmutableMap.of(ids1, 1, ids2, 1);
+
+        Map<IntermediateDataSetID, Integer> partitionReuseCount =
+                ImmutableMap.of(ids1, 1, ids2, 1);
+
         Map<IntermediateDataSetID, ResultPartitionType> inputPartitionTypes =
                 ImmutableMap.of(ids1, PIPELINED_BOUNDED, ids2, BLOCKING);
 
