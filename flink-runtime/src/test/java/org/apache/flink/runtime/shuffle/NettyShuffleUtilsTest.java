@@ -63,44 +63,51 @@ public class NettyShuffleUtilsTest extends TestLogger {
      */
     @Test
     public void testComputeRequiredNetworkBuffers() throws Exception {
-        // NettyShuffleMaster.buffersPerInputChannel 'taskmanager.network.memory.buffers-per-channel'
+        // NOTE: NettyShuffleMaster.buffersPerInputChannel 'taskmanager.network.memory.buffers-per-channel'
         int numBuffersPerChannel = 5;
 
-        // NettyShuffleMaster.numFloatingBuffersPerGate 'taskmanager.network.memory.floating-buffers-per-gate'
+        // NOTE: NettyShuffleMaster.numFloatingBuffersPerGate 'taskmanager.network.memory.floating-buffers-per-gate'
         int numBuffersPerGate = 8;
 
-        // NettyShuffleMaster.maxRequiredBuffersPerGate 'taskmanager.network.sort-shuffle.min-parallelism'
+        // NOTE: NettyShuffleMaster.maxRequiredBuffersPerGate 'taskmanager.network.sort-shuffle.min-parallelism'
         Optional<Integer> maxRequiredBuffersPerGate = Optional.of(Integer.MAX_VALUE);
 
-        // NettyShuffleMaster.sortShuffleMinParallelism taskmanager.network.sort-shuffle.min-parallelism
+        // NOTE: NettyShuffleMaster.sortShuffleMinParallelism taskmanager.network.sort-shuffle.min-parallelism
         int sortShuffleMinParallelism = 8;
 
-        // NettyShuffleMaster.sortShuffleMinBuffers  taskmanager.network.sort-shuffle.min-buffers
+        // NOTE: NettyShuffleMaster.sortShuffleMinBuffers  taskmanager.network.sort-shuffle.min-buffers
         int numSortShuffleMinBuffers = 12;
 
+        // NOTE: input jobVertex operator ID
         IntermediateDataSetID ids1 = new IntermediateDataSetID();
         IntermediateDataSetID ids2 = new IntermediateDataSetID();
 
+        // NOTE: input channel Edge id
         int numChannels1 = 3;
         int numChannels2 = 4;
 
+        // NOTE: output jobVertex operator ID
         IntermediateDataSetID ds1 = new IntermediateDataSetID();
         IntermediateDataSetID ds2 = new IntermediateDataSetID();
         IntermediateDataSetID ds3 = new IntermediateDataSetID();
 
+        // NOTE: output subpartition id
         int numSubs1 = 5; // pipelined shuffle
         int numSubs2 = 6; // hash blocking shuffle
         int numSubs3 = 10; // sort blocking shuffle
 
+        // NOTE: output subpartition 5, 6, 10
         Map<IntermediateDataSetID, Integer> subpartitionNums =
                 ImmutableMap.of(ds1, numSubs1, ds2, numSubs2, ds3, numSubs3);
 
         Map<IntermediateDataSetID, ResultPartitionType> partitionTypes =
                 ImmutableMap.of(ds1, PIPELINED_BOUNDED, ds2, BLOCKING, ds3, BLOCKING);
 
+        // NOTE: input channel 3, 4
         Map<IntermediateDataSetID, Integer> numInputChannels =
                 ImmutableMap.of(ids1, numChannels1, ids2, numChannels2);
 
+        // NOTE: input partition count
         Map<IntermediateDataSetID, Integer> partitionReuseCount =
                 ImmutableMap.of(ids1, 1, ids2, 1);
 
