@@ -97,7 +97,8 @@ public class NettyShuffleUtils {
             final Map<IntermediateDataSetID, Integer> partitionReuseCount,
             final Map<IntermediateDataSetID, Integer> subpartitionNums,
             final Map<IntermediateDataSetID, ResultPartitionType> inputPartitionTypes,
-            final Map<IntermediateDataSetID, ResultPartitionType> partitionTypes) {
+            final Map<IntermediateDataSetID, ResultPartitionType> partitionTypes
+    ) {
 
         int requirementForInputs = 0;
         for (IntermediateDataSetID dataSetId : inputChannelNums.keySet()) {

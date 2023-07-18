@@ -82,7 +82,7 @@ public class NettyShuffleUtilsTest extends TestLogger {
         IntermediateDataSetID ids1 = new IntermediateDataSetID();
         IntermediateDataSetID ids2 = new IntermediateDataSetID();
 
-        // NOTE: input channel Edge id
+        // NOTE: num of input-channel for every upstream
         int numChannels1 = 3;
         int numChannels2 = 4;
 
@@ -91,7 +91,7 @@ public class NettyShuffleUtilsTest extends TestLogger {
         IntermediateDataSetID ds2 = new IntermediateDataSetID();
         IntermediateDataSetID ds3 = new IntermediateDataSetID();
 
-        // NOTE: output subpartition id
+        // NOTE: num of output subpartitions for downstream
         int numSubs1 = 5; // pipelined shuffle
         int numSubs2 = 6; // hash blocking shuffle
         int numSubs3 = 10; // sort blocking shuffle
@@ -100,8 +100,10 @@ public class NettyShuffleUtilsTest extends TestLogger {
         Map<IntermediateDataSetID, Integer> subpartitionNums =
                 ImmutableMap.of(ds1, numSubs1, ds2, numSubs2, ds3, numSubs3);
 
+        // NOTE: output
         Map<IntermediateDataSetID, ResultPartitionType> partitionTypes =
                 ImmutableMap.of(ds1, PIPELINED_BOUNDED, ds2, BLOCKING, ds3, BLOCKING);
+
 
         // NOTE: input channel 3, 4
         Map<IntermediateDataSetID, Integer> numInputChannels =
@@ -111,6 +113,7 @@ public class NettyShuffleUtilsTest extends TestLogger {
         Map<IntermediateDataSetID, Integer> partitionReuseCount =
                 ImmutableMap.of(ids1, 1, ids2, 1);
 
+        // NOTE: input Type
         Map<IntermediateDataSetID, ResultPartitionType> inputPartitionTypes =
                 ImmutableMap.of(ids1, PIPELINED_BOUNDED, ids2, BLOCKING);
 
