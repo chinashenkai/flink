@@ -87,6 +87,7 @@ public class NettyShuffleUtilsTest extends TestLogger {
         int numChannels2 = 4;
 
         // NOTE: output jobVertex operator ID
+        // ds0/ds1 is jobVertex's name
         IntermediateDataSetID ds1 = new IntermediateDataSetID();
         IntermediateDataSetID ds2 = new IntermediateDataSetID();
         IntermediateDataSetID ds3 = new IntermediateDataSetID();
