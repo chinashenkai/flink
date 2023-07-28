@@ -29,110 +29,129 @@ import static org.apache.flink.util.Preconditions.checkState;
 /** Utils to manage the specs of the {@link InputGate}, for example, {@link GateBuffersSpec}. */
 public class InputGateSpecUtils {
 
-    public static final int DEFAULT_MAX_REQUIRED_BUFFERS_PER_GATE_FOR_BATCH = 1000;
+  public static final int DEFAULT_MAX_REQUIRED_BUFFERS_PER_GATE_FOR_BATCH = 1000;
 
-    public static final int DEFAULT_MAX_REQUIRED_BUFFERS_PER_GATE_FOR_STREAM = Integer.MAX_VALUE;
+  // taskmanager.network.memory.read-buffer.required-per-gate.max Streaming 代码默认值
+  public static final int DEFAULT_MAX_REQUIRED_BUFFERS_PER_GATE_FOR_STREAM = Integer.MAX_VALUE;
 
-    public static GateBuffersSpec createGateBuffersSpec(
-            Optional<Integer> configuredMaxRequiredBuffersPerGate,
-            int configuredNetworkBuffersPerChannel,
-            int configuredFloatingNetworkBuffersPerGate,
-            ResultPartitionType partitionType,
-            int numInputChannels) {
+  // 为某个 JovVertexInputGate 创建 network buffer
+  public static GateBuffersSpec createGateBuffersSpec(
+      Optional<Integer> configuredMaxRequiredBuffersPerGate, // read-buffer.required-per-gate.max 配置值
+      int configuredNetworkBuffersPerChannel, // buffers-per-channel
+      int configuredFloatingNetworkBuffersPerGate, // floating-buffers-per-gate
+      ResultPartitionType partitionType, // input gate partition type 目前观察到的都是 'PIPELINED_BOUNDED'
+      int numInputChannels // jobVertex 前置 SubResultPartition 个数
+  ) {
 
-        // input-gate required-max
-        int maxRequiredBuffersThresholdPerGate =
-                getEffectiveMaxRequiredBuffersPerGate(
-                        partitionType, configuredMaxRequiredBuffersPerGate);
+    // input-gate required-max
+    // 从代码默认值和配置值中计算最终的 required threshold
+    // 通过partitionType 判断当前Shuffle是batch 还是 streaming
+    // note: (batch 和 streaming 是不一样的计算方法)
+    int maxRequiredBuffersThresholdPerGate =
+        getEffectiveMaxRequiredBuffersPerGate(
+            partitionType, configuredMaxRequiredBuffersPerGate);
 
-        // input-gate required-min-target
-        int targetRequiredBuffersPerGate =
-                getRequiredBuffersTargetPerGate(
-                        numInputChannels, configuredNetworkBuffersPerChannel);
+    // input-gate required-min-target
+    // numInputChannels * buffers-per-channel + 1
+    int targetRequiredBuffersPerGate =
+        getRequiredBuffersTargetPerGate(
+            numInputChannels, configuredNetworkBuffersPerChannel);
 
-        // input-gate total-assigned-target
-        int targetTotalBuffersPerGate =
-                getTotalBuffersTargetPerGate(
-                        numInputChannels,
-                        configuredNetworkBuffersPerChannel,
-                        configuredFloatingNetworkBuffersPerGate);
+    // input-gate total-assigned-target
+    // numInputChannels * buffers-per-channel + floating-buffers-per-gate
+    int targetTotalBuffersPerGate =
+        getTotalBuffersTargetPerGate(
+            numInputChannels,
+            configuredNetworkBuffersPerChannel,
+            configuredFloatingNetworkBuffersPerGate);
 
-        // input-gate required-final
-        int requiredBuffersPerGate =
-                Math.min(maxRequiredBuffersThresholdPerGate, targetRequiredBuffersPerGate);
+    // input-gate required-final
+    // required-threshold 和 required 取最小值
+    int requiredBuffersPerGate =
+        Math.min(maxRequiredBuffersThresholdPerGate, targetRequiredBuffersPerGate);
 
-        int effectiveExclusiveBuffersPerChannel =
-                getExclusiveBuffersPerChannel(
-                        configuredNetworkBuffersPerChannel,
-                        numInputChannels,
-                        requiredBuffersPerGate);
-
-        int effectiveExclusiveBuffersPerGate =
-                getEffectiveExclusiveBuffersPerGate(
-                        numInputChannels, effectiveExclusiveBuffersPerChannel);
-
-        int requiredFloatingBuffers = requiredBuffersPerGate - effectiveExclusiveBuffersPerGate;
-        int totalFloatingBuffers = targetTotalBuffersPerGate - effectiveExclusiveBuffersPerGate;
-
-        checkState(requiredFloatingBuffers > 0, "Must be positive.");
-        checkState(
-                requiredFloatingBuffers <= totalFloatingBuffers,
-                "Wrong number of floating buffers.");
-
-        return new GateBuffersSpec(
-                effectiveExclusiveBuffersPerChannel,
-                requiredFloatingBuffers,
-                totalFloatingBuffers,
-                targetTotalBuffersPerGate);
-    }
-
-    @VisibleForTesting
-    static int getEffectiveMaxRequiredBuffersPerGate(
-            ResultPartitionType partitionType,
-            Optional<Integer> configuredMaxRequiredBuffersPerGate) {
-        return configuredMaxRequiredBuffersPerGate.orElseGet(
-                () ->
-                        partitionType.isPipelinedOrPipelinedBoundedResultPartition()
-                                        // hybrid partition may calculate a backlog that is larger
-                                        // than the accurate value. If all buffers are floating, it
-                                        // will seriously affect the performance.
-                                        || partitionType.isHybridResultPartition()
-                                ? DEFAULT_MAX_REQUIRED_BUFFERS_PER_GATE_FOR_STREAM
-                                : DEFAULT_MAX_REQUIRED_BUFFERS_PER_GATE_FOR_BATCH);
-    }
-
-    /**
-     * Since at least one floating buffer is required, the number of required buffers is reduced by
-     * 1, and then the average number of buffers per channel is calculated. Returning the minimum
-     * value to ensure that the number of required buffers per gate is not more than the given
-     * requiredBuffersPerGate.}.
+    /*
+       input-channel 有效的独占缓冲
+       gate 需要至少一个 float-buffer, 因此所需 buffer 数量减1, 然后计算每个通道的平均缓冲区数量
+       返回最小值以确保每个gate所需的buffer数量不超过 <requiredBuffersPerGate>
      */
-    private static int getExclusiveBuffersPerChannel(
-            int configuredNetworkBuffersPerChannel,
-            int numInputChannels,
-            int requiredBuffersPerGate) {
-        checkArgument(numInputChannels > 0, "Must be positive.");
-        checkArgument(requiredBuffersPerGate >= 1, "Require at least 1 buffer per gate.");
-        return Math.min(
-                configuredNetworkBuffersPerChannel,
-                (requiredBuffersPerGate - 1) / numInputChannels);
-    }
+    int effectiveExclusiveBuffersPerChannel =
+        getExclusiveBuffersPerChannel(
+            configuredNetworkBuffersPerChannel,
+            numInputChannels,
+            requiredBuffersPerGate);
 
-    private static int getRequiredBuffersTargetPerGate(
-            int numInputChannels, int configuredNetworkBuffersPerChannel) {
-        return numInputChannels * configuredNetworkBuffersPerChannel + 1;
-    }
+    // input-gate 有效的独占缓冲, 即 effectiveExclusiveBuffersPerChannel * numInputChannels
+    int effectiveExclusiveBuffersPerGate =
+        getEffectiveExclusiveBuffersPerGate(
+            numInputChannels, effectiveExclusiveBuffersPerChannel);
 
-    private static int getTotalBuffersTargetPerGate(
-            int numInputChannels,
-            int configuredNetworkBuffersPerChannel,
-            int configuredFloatingBuffersPerGate) {
-        return numInputChannels * configuredNetworkBuffersPerChannel
-                + configuredFloatingBuffersPerGate;
-    }
+    // input-gate 最终必须的float-buffer
+    int requiredFloatingBuffers = requiredBuffersPerGate - effectiveExclusiveBuffersPerGate;
+    // input-gate 最终配置的float-buffer
+    int totalFloatingBuffers = targetTotalBuffersPerGate - effectiveExclusiveBuffersPerGate;
 
-    private static int getEffectiveExclusiveBuffersPerGate(
-            int numInputChannels, int effectiveExclusiveBuffersPerChannel) {
-        return effectiveExclusiveBuffersPerChannel * numInputChannels;
-    }
+    // input-gate float-buffer 检查
+    checkState(requiredFloatingBuffers > 0, "Must be positive.");
+    // input-gate float-buffer 配置值如果小于必要buffer数量抛异常
+    checkState(
+        requiredFloatingBuffers <= totalFloatingBuffers,
+        "Wrong number of floating buffers.");
+
+    return new GateBuffersSpec(
+        effectiveExclusiveBuffersPerChannel,
+        requiredFloatingBuffers,
+        totalFloatingBuffers,
+        targetTotalBuffersPerGate);
+  }
+
+  @VisibleForTesting
+  static int getEffectiveMaxRequiredBuffersPerGate(
+      ResultPartitionType partitionType,
+      Optional<Integer> configuredMaxRequiredBuffersPerGate) {
+    return configuredMaxRequiredBuffersPerGate.orElseGet(
+        () ->
+            partitionType.isPipelinedOrPipelinedBoundedResultPartition()
+                // hybrid partition may calculate a backlog that is larger
+                // than the accurate value. If all buffers are floating, it
+                // will seriously affect the performance.
+                || partitionType.isHybridResultPartition()
+                ? DEFAULT_MAX_REQUIRED_BUFFERS_PER_GATE_FOR_STREAM
+                : DEFAULT_MAX_REQUIRED_BUFFERS_PER_GATE_FOR_BATCH);
+  }
+
+  /**
+   * Since at least one floating buffer is required, the number of required buffers is reduced by
+   * 1, and then the average number of buffers per channel is calculated. Returning the minimum
+   * value to ensure that the number of required buffers per gate is not more than the given
+   * requiredBuffersPerGate.}.
+   */
+  private static int getExclusiveBuffersPerChannel(
+      int configuredNetworkBuffersPerChannel,
+      int numInputChannels,
+      int requiredBuffersPerGate) {
+    checkArgument(numInputChannels > 0, "Must be positive.");
+    checkArgument(requiredBuffersPerGate >= 1, "Require at least 1 buffer per gate.");
+    return Math.min(
+        configuredNetworkBuffersPerChannel,
+        (requiredBuffersPerGate - 1) / numInputChannels);
+  }
+
+  private static int getRequiredBuffersTargetPerGate(
+      int numInputChannels, int configuredNetworkBuffersPerChannel) {
+    return numInputChannels * configuredNetworkBuffersPerChannel + 1;
+  }
+
+  private static int getTotalBuffersTargetPerGate(
+      int numInputChannels,
+      int configuredNetworkBuffersPerChannel,
+      int configuredFloatingBuffersPerGate) {
+    return numInputChannels * configuredNetworkBuffersPerChannel
+        + configuredFloatingBuffersPerGate;
+  }
+
+  private static int getEffectiveExclusiveBuffersPerGate(
+      int numInputChannels, int effectiveExclusiveBuffersPerChannel) {
+    return effectiveExclusiveBuffersPerChannel * numInputChannels;
+  }
 }

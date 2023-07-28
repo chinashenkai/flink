@@ -69,24 +69,25 @@ public class NettyShuffleUtilsTest extends TestLogger {
         // NOTE: NettyShuffleMaster.numFloatingBuffersPerGate 'taskmanager.network.memory.floating-buffers-per-gate'
         int numBuffersPerGate = 8;
 
-        // NOTE: NettyShuffleMaster.maxRequiredBuffersPerGate 'taskmanager.network.sort-shuffle.min-parallelism'
+        // NOTE: NettyShuffleMaster.maxRequiredBuffersPerGate 'taskmanager.network.memory.read-buffer.required-per-gate.max'
         Optional<Integer> maxRequiredBuffersPerGate = Optional.of(Integer.MAX_VALUE);
 
-        // NOTE: NettyShuffleMaster.sortShuffleMinParallelism taskmanager.network.sort-shuffle.min-parallelism
+        // NOTE: NettyShuffleMaster.sortShuffleMinParallelism 'taskmanager.network.sort-shuffle.min-parallelism'
         int sortShuffleMinParallelism = 8;
 
-        // NOTE: NettyShuffleMaster.sortShuffleMinBuffers  taskmanager.network.sort-shuffle.min-buffers
+        // NOTE: NettyShuffleMaster.sortShuffleMinBuffers  'taskmanager.network.sort-shuffle.min-buffers'
         int numSortShuffleMinBuffers = 12;
 
-        // NOTE: input jobVertex operator ID
+
+        // NOTE: input(DataSet) jobVertex operator ID
         IntermediateDataSetID ids1 = new IntermediateDataSetID();
         IntermediateDataSetID ids2 = new IntermediateDataSetID();
 
-        // NOTE: num of input-channel for every upstream
+        // NOTE: num of input-channel for upstream edge
         int numChannels1 = 3;
         int numChannels2 = 4;
 
-        // NOTE: output jobVertex operator ID
+        // NOTE: output(DataSet) jobVertex operator ID
         // ds0/ds1 is jobVertex's name
         IntermediateDataSetID ds1 = new IntermediateDataSetID();
         IntermediateDataSetID ds2 = new IntermediateDataSetID();
@@ -98,23 +99,27 @@ public class NettyShuffleUtilsTest extends TestLogger {
         int numSubs3 = 10; // sort blocking shuffle
 
         // NOTE: output subpartition 5, 6, 10
+        // TaskInputsOutputsDescriptor: Number of subpartitions per dataSet.
         Map<IntermediateDataSetID, Integer> subpartitionNums =
                 ImmutableMap.of(ds1, numSubs1, ds2, numSubs2, ds3, numSubs3);
 
-        // NOTE: output
+        // NOTE: output type
+        // TaskInputsOutputsDescriptor: ResultPartitionType per dataSet.
         Map<IntermediateDataSetID, ResultPartitionType> partitionTypes =
                 ImmutableMap.of(ds1, PIPELINED_BOUNDED, ds2, BLOCKING, ds3, BLOCKING);
 
-
-        // NOTE: input channel 3, 4
+        // NOTE: input edge 3, 4
+        // TaskInputsOutputsDescriptor: Number of input channels per dataSet.
         Map<IntermediateDataSetID, Integer> numInputChannels =
                 ImmutableMap.of(ids1, numChannels1, ids2, numChannels2);
 
         // NOTE: input partition count
+        // TaskInputsOutputsDescriptor: Number of the partitions to be re-consumed.
         Map<IntermediateDataSetID, Integer> partitionReuseCount =
                 ImmutableMap.of(ids1, 1, ids2, 1);
 
         // NOTE: input Type
+        // TaskInputsOutputsDescriptor: Result partition types of input channels.
         Map<IntermediateDataSetID, ResultPartitionType> inputPartitionTypes =
                 ImmutableMap.of(ids1, PIPELINED_BOUNDED, ids2, BLOCKING);
 
