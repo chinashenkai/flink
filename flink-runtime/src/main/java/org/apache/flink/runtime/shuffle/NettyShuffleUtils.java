@@ -76,11 +76,12 @@ public class NettyShuffleUtils {
     int min = isSortShuffle ? sortShuffleMinBuffers : numSubpartitions + 1;
     int max =
         type.isBounded()
-            ? numSubpartitions * configuredNetworkBuffersPerChannel
-            + numFloatingBuffersPerGate
-            : (isSortShuffle
-            ? Math.max(min, 4 * numSubpartitions)
-            : NetworkBufferPool.UNBOUNDED_POOL_SIZE);
+            ? numSubpartitions * configuredNetworkBuffersPerChannel + numFloatingBuffersPerGate
+            : (
+            isSortShuffle
+                ? Math.max(min, 4 * numSubpartitions)
+                : NetworkBufferPool.UNBOUNDED_POOL_SIZE
+        );
     // for each upstream hash-based blocking/pipelined subpartition, at least one buffer is
     // needed even the configured network buffers per channel is 0 and this behavior is for
     // performance. If it's not guaranteed that each subpartition can get at least one buffer,
@@ -95,14 +96,17 @@ public class NettyShuffleUtils {
       final Optional<Integer> maxRequiredBuffersPerGate, // required-buffer threshold => read-buffer.required-per-gate.max
       final int sortShuffleMinParallelism, // batch config
       final int sortShuffleMinBuffers, // batch config
-      final Map<IntermediateDataSetID, Integer> inputChannelNums, // input-channels for upstream edge
-      final Map<IntermediateDataSetID, Integer> partitionReuseCount, // for <TaskInputsOutputsDescriptor>, Number of the partitions to be re-consumed.
-      final Map<IntermediateDataSetID, Integer> subpartitionNums,
-      final Map<IntermediateDataSetID, ResultPartitionType> inputPartitionTypes,
-      final Map<IntermediateDataSetID, ResultPartitionType> partitionTypes
+      final Map<IntermediateDataSetID, Integer> inputChannelNums, // input-channels for upstream edge from taskIODesc
+      final Map<IntermediateDataSetID, Integer> partitionReuseCount, // for <TaskInputsOutputsDescriptor>, Number of the partitions to be re-consumed. from taskIODesc
+      final Map<IntermediateDataSetID, Integer> subpartitionNums, // output-channels for this vertex from taskIODesc
+      final Map<IntermediateDataSetID, ResultPartitionType> inputPartitionTypes, // from taskIODesc
+      final Map<IntermediateDataSetID, ResultPartitionType> partitionTypes // from taskIODesc
   ) {
 
+    // requirementForInputs 包含 input gate buffer
     int requirementForInputs = 0;
+
+    // 对于每个上游的 vertex 计算连接到本 vertex 所需要的network buffer个数
     for (IntermediateDataSetID dataSetId : inputChannelNums.keySet()) {
       int numChannels = inputChannelNums.get(dataSetId);
       ResultPartitionType inputPartitionType = inputPartitionTypes.get(dataSetId);
@@ -119,7 +123,11 @@ public class NettyShuffleUtils {
       requirementForInputs += numSingleGateBuffers * partitionReuseCount.get(dataSetId);
     }
 
+
+    // requirementForInputs 包含 output partition buffer
     int requirementForOutputs = 0;
+
+    // 计算本 vertex 为每个下游的 vertex 提供subpartition所需的buffer
     for (IntermediateDataSetID dataSetId : subpartitionNums.keySet()) {
       int numSubs = subpartitionNums.get(dataSetId);
       ResultPartitionType partitionType = partitionTypes.get(dataSetId);
@@ -171,13 +179,22 @@ public class NettyShuffleUtils {
             numSubpartitions,
             type);
 
-    // In order to avoid network buffer request timeout (see FLINK-12852), we announce
-    // network buffer requirement by below:
-    // 1. For canBePipelined shuffle, the floating buffers may not be returned in time due to
-    // back pressure so we need to include all the floating buffers in the announcement, i.e. we
-    // should take the max value;
-    // 2. For blocking shuffle, it is back pressure free and floating buffers can be recycled
-    // in time, so that the minimum required buffers would be enough.
+    /*
+     In order to avoid network buffer request timeout (see FLINK-12852), we announce
+     network buffer requirement by below:
+     1. For canBePipelined shuffle, the floating buffers may not be returned in time due to
+     back pressure so we need to include all the floating buffers in the announcement, i.e. we
+     should take the max value;
+     2. For blocking shuffle, it is back pressure free and floating buffers can be recycled
+     in time, so that the minimum required buffers would be enough.
+
+      为了避免网络缓冲区请求超时
+     1. 对于canBePipelined shuffle，由于背压的原因，浮动缓冲区可能无法及时返回，因此我们需要在公告中包含所有浮动缓冲区，即取最大值；
+     2. 对于阻塞shuffle来说，无背压，并且浮动缓冲区可以及时回收，因此所需的最小缓冲区就足够了。
+
+     基于1.17的版本来看, 对于 canBePipelined shuffle(bounded, not block, not sort) max值为:
+     numSubpartitions * configuredNetworkBuffersPerChannel + numFloatingBuffersPerGate
+     */
     int ret = type.canBePipelinedConsumed() ? minAndMax.getRight() : minAndMax.getLeft();
 
     if (ret == Integer.MAX_VALUE) {
@@ -191,6 +208,9 @@ public class NettyShuffleUtils {
     return ret;
   }
 
-  /** Private default constructor to avoid being instantiated. */
-  private NettyShuffleUtils() {}
+  /**
+   * Private default constructor to avoid being instantiated.
+   */
+  private NettyShuffleUtils() {
+  }
 }
