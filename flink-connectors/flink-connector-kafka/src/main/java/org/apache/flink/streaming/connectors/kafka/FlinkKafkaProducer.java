@@ -984,6 +984,7 @@ public class FlinkKafkaProducer<IN>
             throws FlinkKafkaException {
         switch (semantic) {
             case EXACTLY_ONCE:
+                // 如果在Flink里面明确要求exactly once语义时，就会创建事务生产者并且启动事务。
                 FlinkKafkaInternalProducer<byte[], byte[]> producer = createTransactionalProducer();
                 producer.beginTransaction();
                 return new FlinkKafkaProducer.KafkaTransactionState(
@@ -991,6 +992,7 @@ public class FlinkKafkaProducer<IN>
             case AT_LEAST_ONCE:
             case NONE:
                 // Do not create new producer on each beginTransaction() if it is not necessary
+                // 如果是已经有事务存在，就无需每次都状态kafka事务生产者，直接复用，否则就创建一个非事务生产者
                 final FlinkKafkaProducer.KafkaTransactionState currentTransaction =
                         currentTransaction();
                 if (currentTransaction != null && currentTransaction.producer != null) {
@@ -1004,6 +1006,13 @@ public class FlinkKafkaProducer<IN>
         }
     }
 
+    /**
+     * flush()方法实际上是代理了KafkaProducer.flush()方法。
+     * 
+     * 那么preCommit()方法是在哪里使用的呢？
+     * 答案是TwoPhaseCommitSinkFunction.snapshotState()方法。
+     * TwoPhaseCommitSinkFunction也继承了CheckpointedFunction接口，所以2PC是与检查点机制一同发挥作用的。
+     */
     @Override
     protected void preCommit(FlinkKafkaProducer.KafkaTransactionState transaction)
             throws FlinkKafkaException {
@@ -1020,6 +1029,7 @@ public class FlinkKafkaProducer<IN>
         checkErroneous();
     }
 
+    // 
     @Override
     protected void commit(FlinkKafkaProducer.KafkaTransactionState transaction) {
         if (transaction.isTransactional()) {
@@ -1116,6 +1126,7 @@ public class FlinkKafkaProducer<IN>
         checkErroneous();
     }
 
+    // CheckpointedFunction.snapshotState
     @Override
     public void snapshotState(FunctionSnapshotContext context) throws Exception {
         super.snapshotState(context);

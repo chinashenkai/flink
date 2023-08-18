@@ -166,7 +166,7 @@ public abstract class TwoPhaseCommitSinkFunction<IN, TXN, CONTEXT> extends RichS
 
     /**
      * Method that starts a new transaction.
-     *
+     * NOTE: 开始一个事务，返回事务信息的句柄。
      * @return newly created transaction.
      */
     protected abstract TXN beginTransaction() throws Exception;
@@ -178,6 +178,7 @@ public abstract class TwoPhaseCommitSinkFunction<IN, TXN, CONTEXT> extends RichS
      * calls on already pre committed transactions will always succeed.
      *
      * <p>Usually implementation involves flushing the data.
+     * 预提交（即提交请求）阶段的逻辑。
      */
     protected abstract void preCommit(TXN transaction) throws Exception;
 
@@ -185,6 +186,7 @@ public abstract class TwoPhaseCommitSinkFunction<IN, TXN, CONTEXT> extends RichS
      * Commit a pre-committed transaction. If this method fail, Flink application will be restarted
      * and {@link TwoPhaseCommitSinkFunction#recoverAndCommit(Object)} will be called again for the
      * same transaction.
+     * 正式提交阶段的逻辑。
      */
     protected abstract void commit(TXN transaction);
 
@@ -198,7 +200,7 @@ public abstract class TwoPhaseCommitSinkFunction<IN, TXN, CONTEXT> extends RichS
         commit(transaction);
     }
 
-    /** Abort a transaction. */
+    /** Abort a transaction.取消事务。 */
     protected abstract void abort(TXN transaction);
 
     /** Abort a transaction that was rejected by a coordinator after a failure. */
@@ -246,6 +248,13 @@ public abstract class TwoPhaseCommitSinkFunction<IN, TXN, CONTEXT> extends RichS
         finishProcessing(currentTransaction());
     }
 
+    /**
+     * {@link ChekpointListener#notifyCheckpointComplete()}
+     * 只有在所有检查点都成功完成这个前提下，写入才会成功。
+     * JobManager为协调者，各个算子为参与者（不过只有sink一个参与者会执行提交）。
+     * 一旦有检查点失败，notifyCheckpointComplete()方法就不会执行。
+     * 如果重试也不成功的话，最终会调用abort()方法回滚事务。
+     */
     @Override
     public final void notifyCheckpointComplete(long checkpointId) throws Exception {
         // the following scenarios are possible here
@@ -326,6 +335,8 @@ public abstract class TwoPhaseCommitSinkFunction<IN, TXN, CONTEXT> extends RichS
 
     @Override
     public void snapshotState(FunctionSnapshotContext context) throws Exception {
+        // 这就像准备提交并记住事务的两阶段提交事务的预提交
+
         // this is like the pre-commit of a 2-phase-commit transaction
         // we are ready to commit and remember the transaction
 
@@ -342,6 +353,7 @@ public abstract class TwoPhaseCommitSinkFunction<IN, TXN, CONTEXT> extends RichS
             LOG.debug("{} - stored pending transactions {}", name(), pendingCommitTransactions);
         }
 
+        // 接收器功能关闭后无需启动新事务（不再输入数据）
         // no need to start new transactions after sink function is closed (no more input data)
         if (!finished) {
             currentTransactionHolder = beginTransactionInternal();
@@ -360,6 +372,17 @@ public abstract class TwoPhaseCommitSinkFunction<IN, TXN, CONTEXT> extends RichS
 
     @Override
     public void initializeState(FunctionInitializationContext context) throws Exception {
+        /**
+         * 当我们使用 pendingCommitTransactions 恢复状态时，我们不知道事务是否真的已经提交，
+         * 或者完成主服务器上的检查点和通知此处的编写器之间是否存在失败。
+         * 
+         * （常见的情况实际上是已经提交，主服务器上的提交和这里的通知之间的窗口非常小）
+         * 如果在第一个完成的检查点之前出现故障，或者在横向扩展事件的情况下，
+         * 某些新任务没有并且分配了要检查的事务，则可能根本没有任何事务）
+         * 
+         * 我们可以检查多个事务，以防发生缩减事件，
+         * 或者出于“notifyCheckpointComplete（）”方法中讨论的原因。
+         */
         // when we are restoring state with pendingCommitTransactions, we don't really know whether
         // the
         // transactions were already committed, or whether there was a failure between

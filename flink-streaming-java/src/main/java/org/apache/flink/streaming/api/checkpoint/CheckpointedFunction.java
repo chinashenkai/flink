@@ -151,6 +151,11 @@ import org.apache.flink.runtime.state.FunctionSnapshotContext;
 public interface CheckpointedFunction {
 
     /**
+     * 当请求检查点的快照时，将调用此方法。
+     * 这充当函数的挂钩，以确保所有状态在初始化时都通过函数
+     * 之前是{@link FunctionInitializationContext}、
+     * 或者现在由 {@link FnctionSnapshotContext} 提供的方式发布。
+     * 
      * This method is called when a snapshot for a checkpoint is requested. This acts as a hook to
      * the function to ensure that all state is exposed by means previously offered through {@link
      * FunctionInitializationContext} when the Function was initialized, or offered now by {@link
@@ -162,6 +167,8 @@ public interface CheckpointedFunction {
     void snapshotState(FunctionSnapshotContext context) throws Exception;
 
     /**
+     * 在分布式执行期间创建并行函数实例时调用此方法。函数通常在此方法中设置其存储数据结构的状态。
+     * 
      * This method is called when the parallel function instance is created during distributed
      * execution. Functions typically set up their state storing data structures in this method.
      *
